@@ -177,6 +177,7 @@ class Detect(nn.Module):
         scores = torch.cat([cls_head[i](x[i]).view(bs, self.nc, -1) for i in range(self.nl)], dim=-1)
         return {"boxes": boxes, "scores": scores, "feats": x}
 
+
     def forward(
         self, x: list[torch.Tensor]
     ) -> dict[str, torch.Tensor] | torch.Tensor | tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -191,6 +192,14 @@ class Detect(nn.Module):
                 6) with [x1, y1, x2, y2, score, class_index] when end-to-end; returned alone in export mode and
                 otherwise as a (predictions, raw prediction dict) tuple.
         """
+        # RKNN export: return raw open--to-many outputs
+        if self.export and self.format == "rknn":
+            outputs = []
+            for i in range(self.nl): 
+                outputs.append(self.cv2[i](x[i]))  # raw box regression
+                outputs.append(self.cv3[i](x[i]))  # raw classification logits
+            return tuple(outputs)
+
         preds = self.forward_head(x, **self.one2many)
         if getattr(self, "one2one_cv2", None) is not None:
             x_detach = [xi.detach() for xi in x] if self.training else x  # detach keeps one2one out of the backbone
