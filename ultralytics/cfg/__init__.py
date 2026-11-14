@@ -206,6 +206,10 @@ CFG_FLOAT_KEYS = frozenset(
         "box",
         "cls",
         "dfl",
+        "nwd_threshold",
+        "nwd_c",
+        "nwd_weight",
+        "sr_loss",
         "pose",
         "kobj",
         "rle",
@@ -309,9 +313,10 @@ CFG_BOOL_KEYS = frozenset(
         "profile",
         "channels_last",
         "cls_remap",
+        "nwd",
     }
 )
-CFG_STR_KEYS = frozenset({"optimizer", "split", "copy_paste_mode", "auto_augment"})
+CFG_STR_KEYS = frozenset({"optimizer", "split", "copy_paste_mode", "auto_augment", "calib_data"})
 
 
 def cfg2dict(cfg: str | Path | dict | SimpleNamespace) -> dict:

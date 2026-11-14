@@ -1,0 +1,9 @@
+﻿[sky/phantom43] frames=20
+  raw          det@.25=0.7 det@.01=7.3 det@.001=38.9  GT-hit-frame=0.900  medConf(hits)=0.162
+  mrf_gate_ms  det@.25=0.7 det@.01=8.2 det@.001=40.0  GT-hit-frame=0.900  medConf(hits)=0.294
+[urban/phantom22] frames=13
+  raw          det@.25=0.3 det@.01=15.8 det@.001=110.2  GT-hit-frame=0.692  medConf(hits)=0.040
+  mrf_gate_ms  det@.25=0.3 det@.01=19.3 det@.001=132.6  GT-hit-frame=0.769  medConf(hits)=0.062
+[ground/phantom38] frames=20
+  raw          det@.25=0.1 det@.01=6.3 det@.001=48.1  GT-hit-frame=0.250  medConf(hits)=0.011
+  mrf_gate_ms  det@.25=0.1 det@.01=6.8 det@.001=56.3  GT-hit-frame=0.250  medConf(hits)=0.004

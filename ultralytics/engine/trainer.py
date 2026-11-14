@@ -362,10 +362,9 @@ class BaseTrainer:
                 restore_qat(self.model, ckpt["modelopt"])
             else:
                 batch = max(self.batch_size // max(self.world_size, 1), 1) if self.batch_size >= 1 else 16
+                calib_source = self.args.calib_data or self.data["train"]
                 with torch_distributed_zero_first(LOCAL_RANK), override_configs(self.args, {"cache": False}):
-                    calibration_loader = self.get_dataloader(
-                        self.data["train"], batch_size=batch, rank=-1, mode="train"
-                    )
+                    calibration_loader = self.get_dataloader(calib_source, batch_size=batch, rank=-1, mode="train")
                 self.model = prepare_qat(self.model, calibration_loader, self.preprocess_batch)
                 del calibration_loader
 

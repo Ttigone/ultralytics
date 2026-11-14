@@ -1,0 +1,21 @@
+# Reusable export profiles. Class count and scale count are read from the weights at runtime, so one profile serves
+# ARD-MAV (nc=1) and VisDrone (nc=10); only input size, target platform, output layout and calibration source differ.
+profiles:
+  ard_mav_rk3576:
+    imgsz: 640
+    opset: 17
+    output_layout: flat  # (B,C,H*W), the layout the existing need_train RK3576 decoder expects
+    target_platform: rk3576
+    dtype: i8
+    mean_values: [0, 0, 0]
+    std_values: [255, 255, 255]
+    calib_data: g:/0-rk3588/train/hard1_neg/calib/data.yaml  # deployment video frames (make_calib_video.py)
+  visdrone_rk3576:
+    imgsz: 640
+    opset: 17
+    output_layout: flat
+    target_platform: rk3576
+    dtype: i8
+    mean_values: [0, 0, 0]
+    std_values: [255, 255, 255]
+    calib_data: g:/0-xiandong/rk3576/ultralytice_self/ultralytics/tools/ard_mav/visdrone_calib.yaml

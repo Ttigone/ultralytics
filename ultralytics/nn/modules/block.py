@@ -22,6 +22,7 @@ __all__ = (
     "C3TR",
     "CIB",
     "DFL",
+    "DWR",
     "ELAN1",
     "PSA",
     "SPP",
@@ -2113,3 +2114,46 @@ class RealNVP(nn.Module):
         z, log_det = self.backward_p(x)
         # Closed-form log N(z; 0, I) in 2-D; fp32 keeps z**2 from overflowing under AMP.
         return -0.5 * (z.float() ** 2).sum(-1) - math.log(2 * math.pi) + log_det
+
+
+class DWR(nn.Module):
+    """Dilation-wise Residual block for tiny-object detail recovery.
+
+    Input channels are split into ``groups`` slices; each slice passes through a fixed-dilation 3x3 depthwise
+    convolution and the slices are re-concatenated, fused by a 1x1 pointwise convolution and added to the input
+    (residual). Only Conv/BN/SiLU operators with static dilation rates are used, so the block stays INT8-friendly.
+    """
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int | None = None,
+        groups: int = 4,
+        dilations: tuple[int, ...] | list[int] = (1, 2, 3, 4),
+        shortcut: bool = True,
+    ):
+        """Initialize the DWR block.
+
+        Args:
+            c1 (int): Input channels.
+            c2 (int | None): Output channels; defaults to ``c1``.
+            groups (int): Number of channel slices, each receiving one dilation rate.
+            dilations (tuple[int, ...] | list[int]): Fixed dilation rates cycled across the slices.
+            shortcut (bool): Add the block input to the fused output when ``c1 == c2``.
+        """
+        super().__init__()
+        c2 = c2 or c1
+        dilations = tuple(dilations)
+        groups = max(1, min(groups, c1))
+        self.split_sizes = [c1 // groups + int(i < c1 % groups) for i in range(groups)]
+        self.dw = nn.ModuleList(
+            DWConv(size, size, 3, d=dilations[i % len(dilations)], act=True) for i, size in enumerate(self.split_sizes)
+        )
+        self.pw = Conv(c1, c2, 1, act=False)
+        self.shortcut = shortcut and c1 == c2
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the split-dilated depthwise branch, fuse it and add the residual."""
+        y = torch.cat([conv(part) for conv, part in zip(self.dw, torch.split(x, self.split_sizes, dim=1))], dim=1)
+        y = self.pw(y)
+        return x + y if self.shortcut else y

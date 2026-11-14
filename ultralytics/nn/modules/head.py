@@ -304,6 +304,33 @@ class Detect(nn.Module):
                 setattr(self, name[8:] if end2end else name, None)
 
 
+class DetectSR(Detect):
+    """Detect head with a training-only super-resolution auxiliary branch.
+
+    The branch learns to reconstruct a half-resolution view of the input from the P2 feature (stride 4), which pushes
+    the shallow features to keep high-frequency geometry. It only runs in ``train()`` mode on the one-to-many branch,
+    so validation, prediction and every export format (including the RKNN raw-output path) never contain it.
+    """
+
+    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: tuple[int, ...] = ()):
+        """Initialize the SR-augmented Detect head."""
+        super().__init__(nc, reg_max, end2end, ch)
+        c = max(ch[0] // 2, 16)
+        self.sr = nn.Sequential(
+            Conv(ch[0], c, 1),
+            nn.Upsample(scale_factor=2, mode="nearest"),
+            Conv(c, c, 3),
+            Conv(c, 3, 3, act=False),
+        )
+
+    def forward(self, x: list[torch.Tensor]) -> dict | torch.Tensor | tuple:
+        """Add the SR auxiliary output to the training dict only."""
+        out = super().forward(x)
+        if self.training and isinstance(out, dict):
+            out.get("one2many", out)["sr"] = self.sr(x[0])
+        return out
+
+
 class Segment(Detect):
     """YOLO Segment head for segmentation models.
 

@@ -56,6 +56,7 @@ conf: # (float, optional) confidence threshold; defaults: predict=0.25, val=0.00
 iou: 0.7 # (float) IoU threshold used for NMS
 max_det: 300 # (int) maximum number of detections per image
 quantize: # (int|str, optional) precision: predict/val 16/fp16 or 32/fp32/None sets pt/torchscript compute (FP32 on CPU); elsewhere the artifact/runtime decides, though 16 rounds openvino inputs; export also supports 8/int8 and w8a8|w16a16|w8a16|w8a32; train uses 8/int8 for quantization-aware training (QAT); replaces deprecated half/int8 args
+calib_data: # (str, optional) image-list .txt used for QAT calibration instead of the train loader
 dnn: False # (bool) use OpenCV DNN for ONNX inference
 plots: True # (bool) save plots and images during train/val
 nms: # (bool, optional) None: external NMS (default); True: embed NMS on export; False: NMS-free head if available
@@ -104,6 +105,11 @@ box: 7.5 # (float) box loss gain
 cls: 0.5 # (float) classification loss gain
 cls_pw: 0.0 # (float) class weights power for handling class imbalance (0.0=disable, 1.0=full inverse frequency)
 dfl: 1.5 # (float) box distance loss gain (DFL when reg_max > 1, L1 on DFL-free YOLO26)
+nwd: False # (bool) add normalized Wasserstein distance regression for tiny targets (detect)
+nwd_threshold: 16.0 # (float) longest-side pixel threshold below which a target uses the NWD term
+nwd_c: 12.0 # (float) NWD normalization constant, roughly the dataset's mean absolute object size in pixels
+nwd_weight: 1.0 # (float) gain applied to the NWD term
+sr_loss: 0.0 # (float) training-only super-resolution auxiliary loss gain (DetectSR head only)
 pose: 12.0 # (float) pose loss gain (pose tasks)
 kobj: 1.0 # (float) keypoint objectness loss gain (pose tasks)
 rle: 1.0 # (float) rle loss gain (pose tasks)

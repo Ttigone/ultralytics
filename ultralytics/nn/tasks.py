@@ -22,6 +22,7 @@ from ultralytics.nn.modules import (
     C2PSA,
     C3,
     C3TR,
+    DWR,
     ELAN1,
     OBB,
     OBB26,
@@ -50,6 +51,7 @@ from ultralytics.nn.modules import (
     ConvTranspose,
     Depth,
     Detect,
+    DetectSR,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -2100,6 +2102,7 @@ def parse_model(d, ch, verbose=True):
             GhostConv,
             Bottleneck,
             GhostBottleneck,
+            DWR,
             SPP,
             SPPF,
             C2fPSA,
@@ -2210,6 +2213,7 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset(
             {
                 Detect,
+                DetectSR,
                 WorldDetect,
                 YOLOEDetect,
                 Segment,
@@ -2225,7 +2229,7 @@ def parse_model(d, ch, verbose=True):
             args.extend([reg_max, end2end, [ch[x] for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
+            if m in {Detect, DetectSR, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
                 m.legacy = legacy
         elif m is Depth:
             args = [*args[:1], [ch[x] for x in f]]  # c_mid, ch tuple; drops the legacy mode arg old checkpoints store

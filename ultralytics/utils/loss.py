@@ -111,10 +111,29 @@ class DFLoss(nn.Module):
 class BboxLoss(nn.Module):
     """Criterion class for computing training losses for bounding boxes."""
 
-    def __init__(self, reg_max: int = 16):
-        """Initialize the BboxLoss module; DFL is used when reg_max > 1, otherwise an L1 distance loss."""
+    def __init__(
+        self,
+        reg_max: int = 16,
+        nwd: bool = False,
+        nwd_threshold: float = 16.0,
+        nwd_c: float = 12.0,
+        nwd_weight: float = 1.0,
+    ):
+        """Initialize the BboxLoss module; DFL is used when reg_max > 1, otherwise an L1 distance loss.
+
+        Args:
+            reg_max (int): DFL bins; <= 1 selects the L1 box regression used by YOLO26.
+            nwd (bool): Add the normalized Wasserstein distance (NWD) term for tiny targets.
+            nwd_threshold (float): Longest-side pixel threshold below which a target uses NWD.
+            nwd_c (float): NWD normalization constant, roughly the dataset's mean absolute object size.
+            nwd_weight (float): Gain applied to the NWD term.
+        """
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+        self.nwd = nwd
+        self.nwd_threshold = nwd_threshold
+        self.nwd_c = nwd_c
+        self.nwd_weight = nwd_weight
 
     def forward(
         self,
@@ -133,6 +152,25 @@ class BboxLoss(nn.Module):
         weight = target_scores[fg_mask].sum(-1, keepdim=True)
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
         loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+
+        # NWD term: regression on a Gaussian/Wasserstein scale is far less sensitive to tiny-box IoU noise than CIoU
+        if self.nwd and fg_mask[0].numel():
+            stride_px = stride[fg_mask[1]]  # stride is per-anchor (N, 1); fg_mask is a (batch, anchor) index pair
+            pred_px = pred_bboxes[fg_mask] * stride_px
+            target_px = target_bboxes[fg_mask] * stride_px
+            pred_wh = (pred_px[:, 2:] - pred_px[:, :2]).clamp_(min=1e-6)
+            target_wh = (target_px[:, 2:] - target_px[:, :2]).clamp_(min=1e-6)
+            small = target_wh.amax(-1, keepdim=True) <= self.nwd_threshold
+            if small.any():
+                pred_ctr = pred_px[:, :2] + pred_wh / 2
+                target_ctr = target_px[:, :2] + target_wh / 2
+                w2 = (
+                    (pred_ctr - target_ctr).pow(2).sum(-1, keepdim=True)
+                    + 0.25 * (pred_wh - target_wh).pow(2).sum(-1, keepdim=True)
+                )
+                nwd = torch.exp(-torch.sqrt(w2 + 1e-9) / self.nwd_c)
+                loss_nwd = ((1.0 - nwd) * weight)[small].sum() / target_scores_sum
+                loss_iou = loss_iou + self.nwd_weight * loss_nwd
 
         # 参数配置文件设置为 1, 不使用 DFL loss
         # DFL loss
@@ -380,7 +418,15 @@ class v8DetectionLoss:
             stride=self.stride.tolist(),
             topk2=tal_topk2,
         )
-        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        self.nwd = getattr(h, "nwd", False)
+        self.sr_loss = getattr(h, "sr_loss", 0.0)
+        self.bbox_loss = BboxLoss(
+            m.reg_max,
+            nwd=self.nwd,
+            nwd_threshold=getattr(h, "nwd_threshold", 16.0),
+            nwd_c=getattr(h, "nwd_c", 12.0),
+            nwd_weight=getattr(h, "nwd_weight", 1.0),
+        ).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
@@ -496,7 +542,12 @@ class v8DetectionLoss:
         """Calculate detection loss using assigned targets."""
         batch_size = preds["boxes"].shape[0]
         loss, loss_detach = self.get_assigned_targets_and_loss(preds, batch)[1:]
-        return loss * batch_size, loss_detach
+        loss = loss * batch_size
+        if self.sr_loss and "sr" in preds:
+            sr = preds["sr"]
+            target = F.interpolate(batch["img"].float(), size=sr.shape[-2:], mode="area")
+            loss[0] = loss[0] + self.sr_loss * F.smooth_l1_loss(sr.float(), target)
+        return loss, loss_detach
 
 
 class v8SegmentationLoss(v8DetectionLoss):
